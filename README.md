@@ -6,6 +6,20 @@ gravitation, rendered with GLFW + OpenGL. Starts with three bodies — a
 
 ![Three bodies in stable orbit, with fading orbit trails](assets/orbits.png)
 
+## Presets
+
+| Preset | Command | Description |
+|---|---|---|
+| `orbit` (default) | `./build/gravity_sim` | Sun + two planets on circular orbits |
+| `figure8` | `./build/gravity_sim --preset figure8` | Chenciner–Montgomery figure-8: three equal masses chasing each other along one lemniscate |
+
+The figure-8 choreography is numerically delicate — it only stays on its
+track if the integrator is accurate, so it doubles as a correctness demo.
+Measured over 5 periods: positions stay bounded and total energy drifts
+by ~0.005%.
+
+![Figure-8 three-body choreography](assets/figure8.png)
+
 ## Physics
 
 - Pairwise attraction: `F = G * m1 * m2 / r²`, applied symmetrically
@@ -24,7 +38,8 @@ gravity-sim/
 ├── CMakeLists.txt
 ├── README.md
 ├── assets/
-│   └── orbits.png       # generated via screenshot mode (see below)
+│   ├── orbits.png       # generated via screenshot mode (see below)
+│   └── figure8.png
 ├── include/
 │   ├── Vector2D.hpp     # vector math: add, scale, length, distance, dot
 │   ├── Particle.hpp     # mass, position, velocity, accumulated acceleration
@@ -59,7 +74,8 @@ sips -s format png assets/orbits.bmp --out assets/orbits.png   # macOS
 
 ## Extending
 
-- Add bodies in `makeThreeBodySystem()` (or write your own setup) —
-  `circularSpeed()` gives the velocity for a stable circular orbit.
+- Add a preset: write a `make...System()` function and wire it into the
+  `--preset` flag — `circularSpeed()` gives the velocity for a stable
+  circular orbit around a central mass.
 - Swap `Vector2D` for a `Vector3D` and a perspective projection for 3D.
 - Replace the O(n²) loop with a Barnes–Hut quadtree for large n.

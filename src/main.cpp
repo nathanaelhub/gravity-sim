@@ -51,6 +51,23 @@ Simulation makeThreeBodySystem() {
     return sim;
 }
 
+// Chenciner–Montgomery figure-8 choreography: three equal masses chasing
+// each other along one lemniscate. Initial conditions from Chenciner &
+// Montgomery (2000); period ~6.33 time units. Only survives if the
+// integrator is accurate, so it doubles as a correctness demo.
+Simulation makeFigureEightSystem() {
+    Simulation sim(kG, kSoftening);
+
+    const Vector2D p1{0.97000436, -0.24308753};
+    const Vector2D v3{-0.93240737, -0.86473146};
+    const Vector2D v1 = -v3 / 2.0;
+
+    sim.addParticle(Particle(1.0, p1, v1));
+    sim.addParticle(Particle(1.0, -p1, v1));
+    sim.addParticle(Particle(1.0, {0.0, 0.0}, v3));
+    return sim;
+}
+
 void setProjection(GLFWwindow* window) {
     int width = 0, height = 0;
     glfwGetFramebufferSize(window, &width, &height);
@@ -88,8 +105,23 @@ struct Color {
     float r, g, b;
 };
 
-Color particleColor(const Particle& p) {
-    return p.mass() >= kSunMass ? Color{1.0f, 0.85f, 0.3f} : Color{0.4f, 0.7f, 1.0f};
+Color particleColor(std::size_t index) {
+    static const Color palette[] = {
+        {1.0f, 0.85f, 0.3f},   // gold
+        {0.4f, 0.7f, 1.0f},    // blue
+        {1.0f, 0.5f, 0.55f},   // coral
+        {0.55f, 1.0f, 0.65f},  // mint
+    };
+    return palette[index % (sizeof(palette) / sizeof(palette[0]))];
+}
+
+// Bodies much heavier than the lightest one render larger (the "sun").
+float pointSize(const Simulation& sim, const Particle& p) {
+    double minMass = p.mass();
+    for (const auto& other : sim.particles()) {
+        minMass = std::min(minMass, other.mass());
+    }
+    return p.mass() > 100.0 * minMass ? 18.0f : 8.0f;
 }
 
 void render(const Simulation& sim, const std::vector<Trail>& trails) {
@@ -107,7 +139,7 @@ void render(const Simulation& sim, const std::vector<Trail>& trails) {
     for (std::size_t i = 0; i < trails.size(); ++i) {
         const Trail& trail = trails[i];
         if (trail.size() < 2) continue;
-        const Color c = particleColor(sim.particles()[i]);
+        const Color c = particleColor(i);
 
         glBegin(GL_LINE_STRIP);
         for (std::size_t k = 0; k < trail.size(); ++k) {
@@ -118,9 +150,10 @@ void render(const Simulation& sim, const std::vector<Trail>& trails) {
         glEnd();
     }
 
-    for (const auto& p : sim.particles()) {
-        const Color c = particleColor(p);
-        glPointSize(p.mass() >= kSunMass ? 18.0f : 7.0f);
+    for (std::size_t i = 0; i < sim.particles().size(); ++i) {
+        const Particle& p = sim.particles()[i];
+        const Color c = particleColor(i);
+        glPointSize(pointSize(sim, p));
         glBegin(GL_POINTS);
         glColor4f(c.r, c.g, c.b, 1.0f);
         glVertex2d(p.position().x, p.position().y);
@@ -175,18 +208,26 @@ bool saveFramebufferBMP(GLFWwindow* window, const std::string& path) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    // --preset orbit|figure8 selects the initial system.
     // --frames N --out file.bmp: run N fixed-dt frames, save a
     // screenshot of the final frame, and exit (for README captures).
     long captureFrames = 0;
     std::string capturePath = "screenshot.bmp";
+    std::string preset = "orbit";
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             captureFrames = std::strtol(argv[++i], nullptr, 10);
         } else if (std::strcmp(argv[i], "--out") == 0 && i + 1 < argc) {
             capturePath = argv[++i];
+        } else if (std::strcmp(argv[i], "--preset") == 0 && i + 1 < argc) {
+            preset = argv[++i];
         }
     }
     const bool captureMode = captureFrames > 0;
+    if (preset != "orbit" && preset != "figure8") {
+        std::fprintf(stderr, "Unknown preset '%s' (expected: orbit, figure8)\n", preset.c_str());
+        return 1;
+    }
 
     if (!glfwInit()) {
         std::fprintf(stderr, "Failed to initialize GLFW\n");
@@ -207,7 +248,7 @@ int main(int argc, char** argv) {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(captureMode ? 0 : 1);  // vsync off when capturing
 
-    Simulation sim = makeThreeBodySystem();
+    Simulation sim = preset == "figure8" ? makeFigureEightSystem() : makeThreeBodySystem();
     std::vector<Trail> trails;
 
     long frame = 0;
