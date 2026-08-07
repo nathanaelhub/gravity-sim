@@ -1,5 +1,7 @@
 # Gravity Simulation
 
+[![ci](https://github.com/nathanaelhub/gravity-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/nathanaelhub/gravity-sim/actions/workflows/ci.yml)
+
 A modular C++17 N-body gravity simulator using Newton's law of universal
 gravitation, rendered with GLFW + OpenGL. Starts with three bodies — a
 "sun" and two planets — in stable circular orbits.
@@ -44,9 +46,11 @@ gravity-sim/
 │   ├── Vector2D.hpp     # vector math: add, scale, length, distance, dot
 │   ├── Particle.hpp     # mass, position, velocity, accumulated acceleration
 │   └── Simulation.hpp   # engine interface
-└── src/
-    ├── Simulation.cpp   # pairwise force computation + integration
-    └── main.cpp         # GLFW window, 3-body setup, render loop
+├── src/
+│   ├── Simulation.cpp   # pairwise force computation + integration
+│   └── main.cpp         # GLFW window, 3-body setup, render loop
+├── tests/               # headless physics unit tests (no OpenGL)
+└── Makefile             # `make test` — builds and runs the tests
 ```
 
 ## Build & run
@@ -72,6 +76,19 @@ as a BMP (used to generate the image above):
 sips -s format png assets/orbits.bmp --out assets/orbits.png   # macOS
 ```
 
+## Tests
+
+The simulation core (`Vector2D`, `Particle`, `Simulation`) is separate from the
+rendering, so it is unit-tested **headless — no OpenGL/GLFW required**. The suite
+covers the vector math, semi-implicit Euler integration, pairwise attraction,
+**momentum conservation** across a 3-body run, Plummer-softening finiteness, and
+that a circular orbit stays bounded (the symplectic-integrator claim above). CI
+runs it on every push.
+
+```sh
+make test    # 23 checks
+```
+
 ## Extending
 
 - Add a preset: write a `make...System()` function and wire it into the
@@ -79,3 +96,7 @@ sips -s format png assets/orbits.bmp --out assets/orbits.png   # macOS
   circular orbit around a central mass.
 - Swap `Vector2D` for a `Vector3D` and a perspective projection for 3D.
 - Replace the O(n²) loop with a Barnes–Hut quadtree for large n.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
