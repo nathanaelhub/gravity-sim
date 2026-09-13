@@ -10,6 +10,7 @@
 #include "Simulation.hpp"
 #include "Vector2D.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -70,11 +71,6 @@ static void test_particle_dynamics() {
 }
 
 // ---------------------------------------------------------------- Simulation
-static Vector2D totalMomentum(const Simulation& s) {
-    Vector2D p;
-    for (const auto& b : s.particles()) p += b.mass() * b.velocity();
-    return p;
-}
 
 static void test_two_bodies_attract() {
     Simulation s{1.0, 0.01};
@@ -91,9 +87,9 @@ static void test_momentum_is_conserved() {
     s.addParticle(Particle{2.0, {-3.0, 0.0}, {0.0, 0.5}});
     s.addParticle(Particle{5.0, {2.0, 1.0}, {0.1, 0.0}});
     s.addParticle(Particle{1.0, {0.0, -2.0}, {-0.2, 0.3}});
-    Vector2D before = totalMomentum(s);
+    Vector2D before = s.momentum();
     for (int i = 0; i < 2000; ++i) s.step(0.005);
-    Vector2D after = totalMomentum(s);
+    Vector2D after = s.momentum();
     // internal forces are equal/opposite -> total momentum is invariant
     CHECK_NEAR(after.x, before.x, 1e-9);
     CHECK_NEAR(after.y, before.y, 1e-9);
@@ -132,6 +128,52 @@ static void test_circular_orbit_stays_bounded() {
     CHECK(dMax < 2.0 * r); // didn't spiral away
 }
 
+static void test_energy_diagnostics_match_closed_form() {
+    const double G = 2.0, eps = 0.1, r = 3.0;
+    Simulation s{G, eps};
+    s.addParticle(Particle{2.0, {0.0, 0.0}, {0.0, 0.0}});
+    s.addParticle(Particle{5.0, {r, 0.0}, {0.0, 4.0}});
+    CHECK_NEAR(s.kineticEnergy(), 0.5 * 5.0 * 16.0, 1e-12);
+    CHECK_NEAR(s.potentialEnergy(), -G * 2.0 * 5.0 / std::sqrt(r * r + eps * eps), 1e-12);
+    CHECK_NEAR(s.angularMomentum(), 5.0 * (r * 4.0), 1e-12);   // m (x vy - y vx)
+    CHECK_NEAR(s.momentum().y, 20.0, 1e-12);
+}
+
+static void test_angular_momentum_is_conserved() {
+    // gravity is a central force, so total angular momentum is invariant
+    Simulation s{1.0, 0.05};
+    s.addParticle(Particle{2.0, {-3.0, 0.0}, {0.0, 0.5}});
+    s.addParticle(Particle{5.0, {2.0, 1.0}, {0.1, 0.0}});
+    s.addParticle(Particle{1.0, {0.0, -2.0}, {-0.2, 0.3}});
+    const double before = s.angularMomentum();
+    for (int i = 0; i < 2000; ++i) s.step(0.005);
+    CHECK_NEAR(s.angularMomentum(), before, 1e-9);
+}
+
+// The README's figure-8 accuracy claim, measured the way the app runs it:
+// 1/60 s frames split into 8 substeps, 5 periods, softening 0.01.
+static void test_figure_eight_energy_error_is_small() {
+    Simulation s{1.0, 0.01};
+    const Vector2D p1{0.97000436, -0.24308753};
+    const Vector2D v3{-0.93240737, -0.86473146};
+    s.addParticle(Particle{1.0, p1, -v3 / 2.0});
+    s.addParticle(Particle{1.0, -p1, -v3 / 2.0});
+    s.addParticle(Particle{1.0, {0.0, 0.0}, v3});
+
+    const double period = 6.32591398;
+    const long frames = std::lround(5 * period * 60.0);
+    const double e0 = s.totalEnergy();
+    double worst = 0.0;
+    for (long f = 0; f < frames; ++f) {
+        s.step(1.0 / 60.0, 8);
+        worst = std::max(worst, std::fabs((s.totalEnergy() - e0) / e0));
+    }
+    const double final = std::fabs((s.totalEnergy() - e0) / e0);
+    std::printf("  figure-8, 5 periods: worst |dE/E| = %.2e, final = %.2e\n", worst, final);
+    CHECK(worst < 1e-3);
+    CHECK(final < 1e-4);
+}
+
 int main() {
     test_vector();
     test_particle_dynamics();
@@ -139,6 +181,9 @@ int main() {
     test_momentum_is_conserved();
     test_softening_bounds_force();
     test_circular_orbit_stays_bounded();
+    test_energy_diagnostics_match_closed_form();
+    test_angular_momentum_is_conserved();
+    test_figure_eight_energy_error_is_small();
 
     std::printf("\n%d checks, %d failed\n", g_checks, g_fail);
     return g_fail == 0 ? 0 : 1;

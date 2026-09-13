@@ -19,6 +19,17 @@ public:
     // smaller steps for stability at high frame-time spikes.
     void step(double dt, int substeps = 1);
 
+    // --- Conserved-quantity diagnostics ------------------------------------
+    // A correct integrator should hold these (nearly) constant, so they are
+    // the honest way to measure accuracy. The potential uses the same
+    // Plummer softening as the force, U = -G m1 m2 / sqrt(r^2 + eps^2), so
+    // the force is exactly -grad U and energy is conserved by the physics.
+    double kineticEnergy() const;
+    double potentialEnergy() const;
+    double totalEnergy() const { return kineticEnergy() + potentialEnergy(); }
+    Vector2D momentum() const;
+    double angularMomentum() const;  // z-component about the origin
+
 private:
     void computeForces();
 

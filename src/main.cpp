@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
@@ -253,6 +254,8 @@ int main(int argc, char** argv) {
 
     long frame = 0;
     double lastTime = glfwGetTime();
+    const double energy0 = sim.totalEnergy();
+    double worstEnergyError = 0.0;
     while (!glfwWindowShouldClose(window)) {
         double dt;
         if (captureMode) {
@@ -266,6 +269,8 @@ int main(int argc, char** argv) {
         }
 
         sim.step(dt, kSubsteps);
+        worstEnergyError = std::max(worstEnergyError,
+                                    std::fabs((sim.totalEnergy() - energy0) / energy0));
         recordTrails(sim, trails);
 
         setProjection(window);
@@ -284,6 +289,9 @@ int main(int argc, char** argv) {
             render(sim, trails);
             if (saveFramebufferBMP(window, capturePath)) {
                 std::printf("Saved %s after %ld frames\n", capturePath.c_str(), frame);
+                std::printf("Energy: final |dE/E| = %.2e, worst over the run = %.2e\n",
+                            std::fabs((sim.totalEnergy() - energy0) / energy0),
+                            worstEnergyError);
             } else {
                 std::fprintf(stderr, "Failed to write %s\n", capturePath.c_str());
             }

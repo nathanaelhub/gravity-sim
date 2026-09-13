@@ -39,3 +39,40 @@ void Simulation::step(double dt, int substeps) {
         }
     }
 }
+
+double Simulation::kineticEnergy() const {
+    double k = 0.0;
+    for (const auto& p : particles_) {
+        k += 0.5 * p.mass() * p.velocity().lengthSquared();
+    }
+    return k;
+}
+
+double Simulation::potentialEnergy() const {
+    double u = 0.0;
+    for (std::size_t i = 0; i < particles_.size(); ++i) {
+        for (std::size_t j = i + 1; j < particles_.size(); ++j) {
+            const double distSq =
+                Vector2D::distanceSquared(particles_[i].position(), particles_[j].position()) +
+                softening_ * softening_;
+            u -= G_ * particles_[i].mass() * particles_[j].mass() / std::sqrt(distSq);
+        }
+    }
+    return u;
+}
+
+Vector2D Simulation::momentum() const {
+    Vector2D total;
+    for (const auto& p : particles_) {
+        total += p.velocity() * p.mass();
+    }
+    return total;
+}
+
+double Simulation::angularMomentum() const {
+    double l = 0.0;
+    for (const auto& p : particles_) {
+        l += p.mass() * (p.position().x * p.velocity().y - p.position().y * p.velocity().x);
+    }
+    return l;
+}

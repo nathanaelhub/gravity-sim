@@ -17,8 +17,10 @@ gravitation, rendered with GLFW + OpenGL. Starts with three bodies — a
 
 The figure-8 choreography is numerically delicate — it only stays on its
 track if the integrator is accurate, so it doubles as a correctness demo.
-Measured over 5 periods: positions stay bounded and total energy drifts
-by ~0.005%.
+Measured over 5 periods at the app's step size (`make test` reproduces it):
+total energy ends within 0.002% of where it started, but swings by up to
+~0.04% mid-orbit, at the close approaches. Capture mode (`--frames N`) prints
+the same two numbers for any run.
 
 ![Figure-8 three-body choreography](assets/figure8.png)
 
@@ -32,6 +34,10 @@ by ~0.005%.
   bounded; explicit Euler would spiral outward.
 - Each rendered frame is split into 8 substeps for stability, and the
   frame delta is clamped so window drags don't blow up the integrator.
+- **Diagnostics**: `Simulation` reports kinetic, potential and total energy,
+  linear momentum and angular momentum. The potential uses the same softening
+  as the force (`U = −G m₁m₂ / √(r² + ε²)`), so energy is exactly conserved by
+  the physics and any drift is integrator error.
 
 ## Layout
 
@@ -81,12 +87,13 @@ sips -s format png assets/orbits.bmp --out assets/orbits.png   # macOS
 The simulation core (`Vector2D`, `Particle`, `Simulation`) is separate from the
 rendering, so it is unit-tested **headless — no OpenGL/GLFW required**. The suite
 covers the vector math, semi-implicit Euler integration, pairwise attraction,
-**momentum conservation** across a 3-body run, Plummer-softening finiteness, and
-that a circular orbit stays bounded (the symplectic-integrator claim above). CI
-runs it on every push.
+**momentum and angular-momentum conservation** across a 3-body run,
+Plummer-softening finiteness, that a circular orbit stays bounded, the energy
+diagnostics against closed form, and the figure-8 energy error quoted above.
+CI runs it on every push.
 
 ```sh
-make test    # 23 checks
+make test    # 30 checks
 ```
 
 ## Extending
