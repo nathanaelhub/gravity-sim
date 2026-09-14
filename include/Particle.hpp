@@ -27,6 +27,10 @@ public:
         position_ += velocity_ * dt;
     }
 
+    // The two halves of a leapfrog step (see Simulation::step).
+    void kick(double dt) { velocity_ += acceleration_ * dt; }
+    void drift(double dt) { position_ += velocity_ * dt; }
+
 private:
     double mass_;
     Vector2D position_;

@@ -11,12 +11,17 @@ public:
     Simulation(double gravitationalConstant, double softening)
         : G_(gravitationalConstant), softening_(softening) {}
 
-    void addParticle(const Particle& p) { particles_.push_back(p); }
+    void addParticle(const Particle& p) {
+        particles_.push_back(p);
+        forcesValid_ = false;  // cached accelerations no longer cover everyone
+    }
 
     const std::vector<Particle>& particles() const { return particles_; }
 
     // Advance the system by dt, internally split into `substeps`
-    // smaller steps for stability at high frame-time spikes.
+    // smaller steps. Integration is leapfrog (velocity Verlet, kick-drift-
+    // kick): second-order accurate and symplectic, at one force evaluation
+    // per substep.
     void step(double dt, int substeps = 1);
 
     // --- Conserved-quantity diagnostics ------------------------------------
@@ -36,4 +41,5 @@ private:
     double G_;
     double softening_;
     std::vector<Particle> particles_;
+    bool forcesValid_ = false;  // accelerations match current positions
 };

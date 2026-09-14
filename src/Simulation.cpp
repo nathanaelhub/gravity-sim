@@ -28,14 +28,33 @@ void Simulation::computeForces() {
     }
 }
 
+// Leapfrog / velocity Verlet in kick-drift-kick form:
+//
+//     v += a(x) * h/2      half kick with the current forces
+//     x += v * h           full drift
+//     v += a(x') * h/2     half kick with the forces at the new positions
+//
+// Second-order accurate (semi-implicit Euler, used before, is first order)
+// and still symplectic and time-reversible, so energy errors stay bounded
+// instead of drifting. The forces computed at the end of one substep are
+// exactly the ones the next substep starts with, so they are cached and each
+// substep costs a single O(n^2) force pass — the same as Euler.
 void Simulation::step(double dt, int substeps) {
     if (substeps < 1) substeps = 1;
     const double h = dt / substeps;
 
+    if (!forcesValid_) {
+        computeForces();
+        forcesValid_ = true;
+    }
     for (int s = 0; s < substeps; ++s) {
+        for (auto& p : particles_) {
+            p.kick(0.5 * h);
+            p.drift(h);
+        }
         computeForces();
         for (auto& p : particles_) {
-            p.integrate(h);
+            p.kick(0.5 * h);
         }
     }
 }

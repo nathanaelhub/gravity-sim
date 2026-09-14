@@ -150,28 +150,52 @@ static void test_angular_momentum_is_conserved() {
     CHECK_NEAR(s.angularMomentum(), before, 1e-9);
 }
 
-// The README's figure-8 accuracy claim, measured the way the app runs it:
-// 1/60 s frames split into 8 substeps, 5 periods, softening 0.01.
-static void test_figure_eight_energy_error_is_small() {
+static Simulation figureEight() {
     Simulation s{1.0, 0.01};
     const Vector2D p1{0.97000436, -0.24308753};
     const Vector2D v3{-0.93240737, -0.86473146};
     s.addParticle(Particle{1.0, p1, -v3 / 2.0});
     s.addParticle(Particle{1.0, -p1, -v3 / 2.0});
     s.addParticle(Particle{1.0, {0.0, 0.0}, v3});
+    return s;
+}
+static const double kFigureEightPeriod = 6.32591398;
 
-    const double period = 6.32591398;
-    const long frames = std::lround(5 * period * 60.0);
+// Worst relative energy error over `periods` figure-8 periods at 1/60 s
+// frames split into `substeps`.
+static double figureEightWorstEnergyError(int substeps, double periods, double* final = nullptr) {
+    Simulation s = figureEight();
+    const long frames = std::lround(periods * kFigureEightPeriod * 60.0);
     const double e0 = s.totalEnergy();
     double worst = 0.0;
     for (long f = 0; f < frames; ++f) {
-        s.step(1.0 / 60.0, 8);
+        s.step(1.0 / 60.0, substeps);
         worst = std::max(worst, std::fabs((s.totalEnergy() - e0) / e0));
     }
-    const double final = std::fabs((s.totalEnergy() - e0) / e0);
+    if (final) *final = std::fabs((s.totalEnergy() - e0) / e0);
+    return worst;
+}
+
+// The README's figure-8 accuracy claim, measured the way the app runs it:
+// 1/60 s frames split into 8 substeps, 5 periods, softening 0.01.
+static void test_figure_eight_energy_error_is_small() {
+    double final = 0.0;
+    const double worst = figureEightWorstEnergyError(8, 5.0, &final);
     std::printf("  figure-8, 5 periods: worst |dE/E| = %.2e, final = %.2e\n", worst, final);
-    CHECK(worst < 1e-3);
-    CHECK(final < 1e-4);
+    CHECK(worst < 1e-5);    // semi-implicit Euler managed 3.9e-4
+    CHECK(final < 1e-7);    // ... and 1.3e-5
+}
+
+// Leapfrog is second order: halving the step should cut the energy error
+// ~4x. (First-order semi-implicit Euler only manages ~2x, so this also
+// guards against silently regressing the integrator.)
+static void test_integrator_is_second_order() {
+    const double coarse = figureEightWorstEnergyError(2, 1.0);
+    const double fine = figureEightWorstEnergyError(4, 1.0);
+    std::printf("  energy error, substeps 2 -> 4: %.2e -> %.2e (ratio %.2f)\n",
+                coarse, fine, coarse / fine);
+    CHECK(coarse / fine > 3.5);
+    CHECK(coarse / fine < 4.5);
 }
 
 int main() {
@@ -184,6 +208,7 @@ int main() {
     test_energy_diagnostics_match_closed_form();
     test_angular_momentum_is_conserved();
     test_figure_eight_energy_error_is_small();
+    test_integrator_is_second_order();
 
     std::printf("\n%d checks, %d failed\n", g_checks, g_fail);
     return g_fail == 0 ? 0 : 1;

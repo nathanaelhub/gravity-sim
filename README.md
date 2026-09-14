@@ -17,10 +17,11 @@ gravitation, rendered with GLFW + OpenGL. Starts with three bodies — a
 
 The figure-8 choreography is numerically delicate — it only stays on its
 track if the integrator is accurate, so it doubles as a correctness demo.
-Measured over 5 periods at the app's step size (`make test` reproduces it):
-total energy ends within 0.002% of where it started, but swings by up to
-~0.04% mid-orbit, at the close approaches. Capture mode (`--frames N`) prints
-the same two numbers for any run.
+Measured over 5 periods at the app's step size (`make test` reproduces it),
+total energy never strays more than **0.0003%** from where it started and ends
+within 0.0000003%. (With the previous semi-implicit Euler integrator the same
+run swung by 0.04% mid-orbit.) Capture mode (`--frames N`) prints both numbers
+for any run.
 
 ![Figure-8 three-body choreography](assets/figure8.png)
 
@@ -30,8 +31,12 @@ the same two numbers for any run.
   (Newton's third law) so each pair is computed once — O(n²/2) per step.
 - **Plummer softening** (`r² → r² + ε²`) bounds the force as particles
   approach, preventing division by zero and unphysical slingshots.
-- **Semi-implicit (symplectic) Euler** integration keeps orbital energy
-  bounded; explicit Euler would spiral outward.
+- **Leapfrog (velocity Verlet, kick-drift-kick)** integration: second-order
+  accurate, and — like the semi-implicit Euler it replaced — symplectic, so
+  orbital energy stays bounded instead of spiralling. Forces at the end of one
+  substep are reused at the start of the next, so it costs one O(n²) force pass
+  per substep, the same as Euler, for ~150× less energy error on the figure-8.
+  A test checks the order directly: halving the step cuts the error 4×.
 - Each rendered frame is split into 8 substeps for stability, and the
   frame delta is clamped so window drags don't blow up the integrator.
 - **Diagnostics**: `Simulation` reports kinetic, potential and total energy,
@@ -50,10 +55,10 @@ gravity-sim/
 │   └── figure8.png
 ├── include/
 │   ├── Vector2D.hpp     # vector math: add, scale, length, distance, dot
-│   ├── Particle.hpp     # mass, position, velocity, accumulated acceleration
+│   ├── Particle.hpp     # mass, position, velocity, acceleration; kick/drift
 │   └── Simulation.hpp   # engine interface
 ├── src/
-│   ├── Simulation.cpp   # pairwise force computation + integration
+│   ├── Simulation.cpp   # pairwise forces, leapfrog step, energy/momentum
 │   └── main.cpp         # GLFW window, 3-body setup, render loop
 ├── tests/               # headless physics unit tests (no OpenGL)
 └── Makefile             # `make test` — builds and runs the tests
@@ -86,14 +91,15 @@ sips -s format png assets/orbits.bmp --out assets/orbits.png   # macOS
 
 The simulation core (`Vector2D`, `Particle`, `Simulation`) is separate from the
 rendering, so it is unit-tested **headless — no OpenGL/GLFW required**. The suite
-covers the vector math, semi-implicit Euler integration, pairwise attraction,
+covers the vector math, the particle integration steps, pairwise attraction,
 **momentum and angular-momentum conservation** across a 3-body run,
 Plummer-softening finiteness, that a circular orbit stays bounded, the energy
-diagnostics against closed form, and the figure-8 energy error quoted above.
+diagnostics against closed form, the figure-8 energy error quoted above, and
+that the integrator is second order.
 CI runs it on every push.
 
 ```sh
-make test    # 30 checks
+make test    # 32 checks
 ```
 
 ## Extending
